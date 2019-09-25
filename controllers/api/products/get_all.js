@@ -2,9 +2,10 @@ const db = require('../../../db');
 const {imageUrl} = require('../../../helpers/');
 
 module.exports = async(req,res,next) => {
-    console.log("Host:",req.get('host'));
-console.log("Protocol:",req.protocol);
-    
+    try {
+        
+    // Data , Field Data
+    //[ [],[]]
     const [results] = await db.query(`SELECT p.pid as id,p.caption,p.cost, p.name, i.file,i.altText, i.type, i.pid as ImageId
              FROM products AS p 
              JOIN images AS i ON i.productId = p.id WHERE i.type="thumbnail"`);
@@ -30,6 +31,9 @@ console.log("Protocol:",req.protocol);
     res.send({
         products: products,
         
-    })
+    });
+} catch(err){
+    next(err);
+}
 }
 

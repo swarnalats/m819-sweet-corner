@@ -1,13 +1,24 @@
 const db = require('../../../db');
 const jwt =  require('jwt-simple');
 const { cartSecret} = require('../../../config/jwt_cart');
+const {imgUrl, getCartTotals} = require('../../../helpers');
 
 module.exports = async (req,res, next) => {
     try {
         let cartToken = req.headers['x-cart-token'] || null;
+        const {quantity = 1} = req.body;
         const {product_id} = req.params;
-
         let cartId = null; 
+
+        if(isNaN(quantity)){
+            throw new StatusError(422, "Invalid quantity received, must be a number");
+        }
+
+        // return res.send({    
+        //     message:"Testing",
+        //     quantity:quantity
+        // });
+
         const [[product = null]] = await db.execute('SELECT id from products WHERE pid =?', [product_id]);
       
         console.log("Product:",product);
@@ -35,13 +46,13 @@ module.exports = async (req,res, next) => {
                 //Create a token for that cart 
 
                 const [[activeCartStatus = null]] = await db.query('SELECT id FROM cartStatuses WHERE mid="active"');
+                
                 if(!activeCartStatus){
                     throw new StatusError(500,"Error finding cart status");
                 }
-                console.log("Cart Status:",activeCartStatus);
-                const [newCartResult] = await db.query('INSERT into cart (pid, statusId) VALUES(UUID(),?)',[activeCartStatus.id]);
-                console.log('New Cart Result:',newCartResult);
                 
+                const [newCartResult] = await db.query('INSERT INTO cart (pid, statusId) VALUES(UUID(),?)',[activeCartStatus.id]);
+                                
                 cartId = newCartResult.insertId ;
 
                 const tokenData = {
@@ -56,22 +67,29 @@ module.exports = async (req,res, next) => {
                 cartId = tokenData.cartId;  
             }
 
-const [[existingItem = null]] = await db.query('SELECT id, quantity FROM cartItmes WHERE productId = ? AND cartId = ? ', [product.id, cartId]);
+         const [[cart]] = await db.query('SELECT * FROM cart WHERE id=?',[cartId]); 
+const [[existingItem = null]] = await db.query(`SELECT id, quantity FROM cartItems WHERE productId =? AND cartId =?`, [product.id, cartId]);
 console.log('ExistingItem:',existingItem);
+let itemId = null;
 
 if(!existingItem){
-    const [addItemResult] = await db.execute('INSERT INTO cartItems (pid, cartId, productId, quantity) VALUES (UUID(),?,?,?', [cartId, product.id],1);
+    const [addItemResult] = await db.execute('INSERT INTO cartItems (pid, cartId, productId, quantity) VALUES (UUID(),?,?,?)', [cartId, product.id,1]);
     console.log('Add Item Result',addItemResult);
+    itemId = addItemResult.insertId;
 }else {
     //Update existing items quantity 
+    console.log("CartID",cartId); 
+    const [updateQuantity] = await db.query(`UPDATE cartItems SET quantity=quantity+? WHERE Id=?`, [quantity,existingItem.id]);
+    console.log("UPDATED TABLE CartItems");
+    itemId = existingItem.id; 
 }
 
-{
-    cartId: '',
-    cartToken:'',
-    message:'1 cupcake added to cart'
+// {
+//     cartId: '',
+//     cartToken:'',
+//     message:'1 cupcake added to cart'
 
-}
+// }
 //If no cart, create a new cart
 
         // Does item exist in cart 
@@ -80,12 +98,28 @@ if(!existingItem){
         
         //if no, add as new item to cart
 
+        const [[output]] = await db.query(`SELECT ci.createdAt AS added, p.cost AS "each", ci.pid AS itemId, p.name, p.pid AS productId, ci.quantity, i.altText, i.file, (p.cost * ci.quantity) AS total FROM cartItems AS ci JOIN products AS p ON ci.productId=p.id JOIN images AS i ON i.productId=p.id WHERE ci.id=? AND i.type="thumbnail" LIMIT 1`,[itemId]);
+        console.log("Cart Item Output:",output);
+
+        const { altText ,file, ...itemInfo} = output;
+               
+        const total = await getCartTotals(cart.id); 
+        console.log("YAY2");
         res.send({
-            message: 'Add Item to cart',
-            productID:product_id,
-            cartToken, 
-            cartId
-        })
+            "cartId":cart.pid,
+            "cartToken":cartToken,
+            item: {
+                ...itemInfo,
+                thumbnail:{
+                    altText:altText,
+                    // url:imgUrl(req,"thumbnail",file)
+
+                }
+            },
+            // message: `${output.quantity} ${itemInfo.name }Cupcakes added to the cart`,
+            total:total
+                
+        });
 
     }
     catch(err){

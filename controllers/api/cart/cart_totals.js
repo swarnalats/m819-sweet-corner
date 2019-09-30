@@ -1,30 +1,23 @@
 const db = require('../../../db');
+const jwt = require('jwt-simple');
+const {cartSecret} = require('../../../config/jwt_cart');
+const {getCartTotals} = require('../../../helpers');
+
 
 module.exports = async (req,res,next) => {
      try {
-//         const {pid} = req.params;
-//         const [results] = await db.query(`SELECT c.quantity,c.productId, p.productId,  p.cost from cartItems as c 
-//         JOIN products AS p ON c.productId = p.productId `);  
+        const cartToken = req.headers['x-cart-token'] || null;
         
-// // console.log("Products:", results); 
+        if(!cartToken){
+            throw new StatusError(400, "Missing Cart Token");
+        }
 
-// let totalQuantity =0;
-// let totalCost = 0;
+        const tokenData = jwt.decode(cartToken, cartSecret);
 
-// const cartItems = results.map(p => {
-//     totalquantity + p.quantity, 
-//     totalCost + p.cost
-//     }   
-// );  
-
-
-// res.send({
-//     "total": {
-//         "cost":cartItems[0],
-//         "items":cartItems[1]
-//     }  
-// });
+        const total = await getCartTotals(tokenData.cartId);
+              
         res.send({
+            total,
             message:"Getting the totals for the items"
         })
 } 

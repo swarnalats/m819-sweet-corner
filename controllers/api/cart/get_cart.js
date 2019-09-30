@@ -1,44 +1,56 @@
 const db = require('../../../db');
-const {imageUrl} = require('../../../helpers/');
+const jwt = require('jwt-simple');
+const {cartSecret} = require('../../../config/jwt_cart');
+const {getCartTotals, imageUrl} = require('../../../helpers');
 
-module.exports =  (req,res,next) => {
+module.exports = async (req,res,next) => {
     try {
-//         const {pid} = req.params;
-//         const [results] = await db.query(`SELECT c.pid as id,c.cartId,c.quantity,c.productId as cid, p.productId as prodId, c,createdAt, p.cost, p.name  from cartItems as c 
-//         JOIN products AS p ON c.productId = p.productId
-//         JOIN images as i ON p.productId = i.productId WHERE i.type = "thumbnail" `);  
+
+        //Cart Token 
+        const cartToken = req.headers['x-cart-token'] || null; 
+
+        //throw error if no token
+        if(!cartToken){
+            throw new StatusError(400, "Missing Cart Token");
+        }
+         //decode token 
+        const tokenData = jwt.decode(cartToken, cartSecret);
+
+        //query db to get an array of all the items in the cart  
+        const [results] = await db.execute(`SELECT ci.createdAt AS added,p.cost AS "each",
+            ci.cartId AS itemId,p.name,p.pid AS productId,ci.quantity,(ci.quantity * p.cost) AS total,
+            i.altText,i.file FROM cart AS c
+            JOIN cartItems AS ci ON c.id=ci.cartId
+            JOIN products AS p ON ci.productId=p.id 
+            JOIN images AS i on p.id=i.productId  
+            where c.id=? AND i.type="thumbnail"`,[tokenData.cartId] );
+
+        let cartId = null;  
         
-// // console.log("Products:", results); 
+        const items = results.map( i => {
+            const { altText, file, total,cartId: cid , ...item} = i;
+            cartId = cid;
 
-// const cartItems = results.map(p => {
-//   const cartItem = {
-//         cartID:p.cartId,
-//        "item": {
-//            "added":p.createdAt,
-//            "each":p.cost,
-//            "itemId":p.id,
-//            "productID":p.productId,
-//            "name":p.name,
-//            "quantity":p.quantity,
-//            "thumbnail":{
-//                 altText:p.altText,
-//                 url:imageUrl(req,p.type,p.file)
-//             },
-//             "total": p.quantity * p.cost,
-//         }, 
-//         "total": {
-//             "cost": p.quantity * p.cost, 
-//             "item": p.quantity
-//         }  
-//     }   
-//     return cartItem;
-// });  
+            return {
+                ...item,
+                thumbnail:{
+                    altText:altText,
+                    url:imageUrl(req,"thumbnail",file)
+                },
+                total:total
+            }
 
-res.send({
-//    cartItems: cartItems
-    message:"Getting items from the cart"
-});
-} 
+        } );
+
+        //get cart totals 
+        const total = await getCartTotals(tokenData.cartId);
+        //send the data back
+
+        res.send({
+        // cartItems: cartItems
+            cartId, items, total
+        });
+    } 
 catch(err) { 
     next(err);
 }

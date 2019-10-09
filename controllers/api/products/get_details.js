@@ -36,7 +36,7 @@ module.exports = async (req,res,next) => {
         }) ;    
        
     res.send({
-        product
+        ...product
      });
     }
     catch(err){

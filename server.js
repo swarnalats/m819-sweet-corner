@@ -1,3 +1,5 @@
+const {resolve} = require('path');
+
 const express = require('express');
 const cors = require('cors');
 const statusError = require('./helpers/status_error');
@@ -14,8 +16,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({extended:false}));
 
+app.use(express.static(resolve(__dirname, 'client','dist')));
+
 const routes = require('./routes');
 app.use(routes);
+
+app.get('*',(req,res) => {
+    res.sendFile(resolve(__dirname,'client','dist','index.html'));
+}); 
 
 app.use(defaultErrorHandler);
 

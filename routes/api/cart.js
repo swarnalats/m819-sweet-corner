@@ -12,6 +12,6 @@ router.get('/totals',getCartTotals);
 
 // api/cart/item/:product id
 
-router.post('/item/:product_id',addItemToCart);
+router.post('/items/:product_id',addItemToCart);
 
 module.exports = router;

@@ -6,6 +6,7 @@ const defaultErrorHandler = require('./middleware/default_error_handler');
 const PORT = process.env.PORT || 9000;
 
 global.StatusError = statusError;
+global.__rootdir = __dirname; 
 
 const app = express();
 
